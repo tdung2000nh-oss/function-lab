@@ -1,0 +1,1049 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>函数实验室 · 参数可调的函数图像</title>
+<meta name="description" content="拖动滑块实时调节参数，观察正弦、二次、阻尼振动、高斯、指数函数的图像变化。支持缩放、平移与数值表。">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f9f7">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d0d0d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0b0b'/%3E%3Cpath d='M4 16c4-8 8-8 12 0s8 8 12 0' fill='none' stroke='%233987e5' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  /* ---------- design tokens ---------- */
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb;
+    --page: #f9f9f7;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --accent: #2a78d6;
+    --accent-soft: rgba(42, 120, 214, 0.10);
+    --border: rgba(11, 11, 11, 0.10);
+    --wash: rgba(11, 11, 11, 0.04);
+    --tooltip-shadow: 0 8px 28px rgba(11, 11, 11, 0.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface: #1a1a19;
+      --page: #0d0d0d;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --accent: #3987e5;
+      --accent-soft: rgba(57, 135, 229, 0.14);
+      --border: rgba(255, 255, 255, 0.10);
+      --wash: rgba(255, 255, 255, 0.05);
+      --tooltip-shadow: 0 8px 28px rgba(0, 0, 0, 0.50);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface: #1a1a19;
+    --page: #0d0d0d;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --accent: #3987e5;
+    --accent-soft: rgba(57, 135, 229, 0.14);
+    --border: rgba(255, 255, 255, 0.10);
+    --wash: rgba(255, 255, 255, 0.05);
+    --tooltip-shadow: 0 8px 28px rgba(0, 0, 0, 0.50);
+  }
+
+  /* ---------- base ---------- */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent-soft); }
+  button, input, summary { font: inherit; }
+  button { color: inherit; }
+  button:focus-visible, input[type="range"]:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .app { max-width: 1180px; margin: 0 auto; padding: 20px clamp(14px, 3vw, 28px) 26px; }
+
+  /* ---------- top bar ---------- */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-mark {
+    width: 36px; height: 36px; border-radius: 10px; background: var(--ink);
+    display: grid; place-items: center; flex: none;
+  }
+  .brand-mark svg { width: 22px; height: 22px; display: block; }
+  .brand h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: 0.01em; }
+  .brand .sub {
+    margin: 2px 0 0; font-size: 10.5px; color: var(--muted);
+    letter-spacing: 0.10em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .icon-btn {
+    width: 34px; height: 34px; flex: none; display: grid; place-items: center;
+    border-radius: 10px; border: 1px solid var(--border);
+    background: transparent; color: var(--ink-2); cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .icon-btn:hover { background: var(--wash); color: var(--ink); }
+  .icon-btn svg { display: block; }
+
+  /* ---------- layout ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 344px minmax(0, 1fr);
+    gap: 16px;
+    height: calc(100dvh - 127px);
+    min-height: 540px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+  .panel {
+    padding: 16px;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--axis) transparent;
+  }
+  .chart-card {
+    padding: 14px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* ---------- chart header ---------- */
+  .chart-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .eyebrow {
+    margin: 0 0 3px; font-size: 11px; color: var(--muted);
+    letter-spacing: 0.10em;
+  }
+  .chart-formula {
+    font-size: 17px; font-weight: 550; line-height: 1.35;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .chart-formula sup { font-size: 0.62em; }
+  .chart-tools { display: flex; align-items: center; gap: 10px; flex: none; }
+  .hint { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+
+  .canvas-wrap {
+    position: relative; flex: 1; min-height: 0;
+    border-radius: 12px; overflow: hidden;
+  }
+  canvas {
+    display: block; width: 100%; height: 100%;
+    touch-action: none; cursor: crosshair;
+  }
+  canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 12px; }
+
+  /* ---------- tooltip ---------- */
+  .tooltip {
+    position: absolute; left: 0; top: 0; z-index: 5;
+    pointer-events: none; will-change: transform;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 11px;
+    min-width: 112px;
+    box-shadow: var(--tooltip-shadow);
+  }
+  .tt-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+  .tt-row + .tt-row { margin-top: 3px; }
+  .tt-k { font-size: 11px; color: var(--muted); }
+  .tt-v { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* ---------- panel controls ---------- */
+  .section-label {
+    margin: 0 0 9px; font-size: 11px; color: var(--muted); letter-spacing: 0.08em;
+  }
+  .tabs { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 18px; }
+  .tab {
+    font-size: 12.5px; padding: 6px 11px; border-radius: 999px;
+    border: 1px solid var(--border); background: transparent; color: var(--ink-2);
+    cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+  }
+  .tab:hover { background: var(--wash); color: var(--ink); }
+  .tab[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+
+  .param { margin-bottom: 15px; }
+  .param-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 5px; }
+  .param-label { font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
+  .param-label i { font-style: italic; font-weight: 600; color: var(--ink); margin-right: 2px; }
+  .param-value {
+    font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink);
+    background: var(--wash); padding: 2px 7px; border-radius: 6px;
+    min-width: 52px; text-align: center;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 22px; margin: 0;
+    background: transparent; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 3px; border-radius: 99px; background: var(--grid); }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 15px; height: 15px; border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface);
+    margin-top: -6px;
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  input[type="range"]::-moz-range-track { height: 3px; border-radius: 99px; background: var(--grid); }
+  input[type="range"]::-moz-range-thumb {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  .insight {
+    font-size: 12px; line-height: 1.65; color: var(--ink-2);
+    background: var(--wash); border-radius: 10px; padding: 9px 11px;
+    margin: 2px 0 14px;
+  }
+
+  .panel-actions { display: flex; gap: 8px; margin-bottom: 14px; }
+  .btn {
+    font-size: 12px; padding: 6px 11px; border-radius: 8px;
+    border: 1px solid var(--border); background: transparent; color: var(--ink-2);
+    cursor: pointer; transition: background .15s, color .15s;
+  }
+  .btn:hover { background: var(--wash); color: var(--ink); }
+
+  details { border-top: 1px solid var(--border); padding-top: 12px; }
+  summary {
+    font-size: 12px; color: var(--ink-2); cursor: pointer;
+    list-style: none; display: flex; align-items: center; gap: 7px;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before {
+    content: ""; width: 5px; height: 5px; flex: none;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted);
+    transform: rotate(-45deg); transition: transform .15s;
+  }
+  details[open] summary::before { transform: rotate(45deg); }
+  .table-scroll {
+    max-height: 220px; overflow: auto; margin-top: 10px;
+    border: 1px solid var(--border); border-radius: 10px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--surface); text-align: right; font-weight: 600;
+    color: var(--ink-2); padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td { text-align: right; padding: 5px 10px; color: var(--ink); border-bottom: 1px solid var(--border); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .foot { margin: 14px 2px 0; font-size: 11px; color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+
+  /* ---------- small screens ---------- */
+  @media (max-width: 900px) {
+    .app { padding: 14px 12px 20px; }
+    .topbar { margin-bottom: 12px; }
+    .layout { grid-template-columns: 1fr; height: auto; min-height: 0; gap: 12px; }
+    .chart-card { order: -1; height: min(64vh, 560px); min-height: 320px; padding: 12px 12px 10px; }
+    .panel { overflow: visible; }
+    .hint { display: none; }
+    .chart-formula { font-size: 15px; }
+  }
+  @media (max-width: 480px) {
+    .brand .sub { letter-spacing: 0.04em; }
+    .chart-formula { font-size: 14px; }
+    .chart-head { align-items: center; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="2" stroke-linecap="round">
+          <path d="M2.5 12c2.5-6 5-6 7.5 0s5 6 7.5 0 3-4.5 4-4.5"/>
+        </svg>
+      </div>
+      <div>
+        <h1>函数实验室</h1>
+        <p class="sub">FUNCTION LAB · 拖动参数，观察图像变化</p>
+      </div>
+    </div>
+    <button id="themeToggle" class="icon-btn" type="button" aria-label="切换深浅色"></button>
+  </header>
+
+  <main class="layout">
+    <section class="card panel" aria-label="参数控制面板">
+      <p class="section-label">选择函数</p>
+      <div class="tabs" id="tabs" role="group" aria-label="函数类型"></div>
+
+      <p class="section-label">调节参数</p>
+      <div id="params"></div>
+      <div class="insight" id="insight"></div>
+      <div class="panel-actions">
+        <button type="button" class="btn" id="resetParams">重置参数</button>
+      </div>
+
+      <details id="tableDetails">
+        <summary>数值表 · 采样点</summary>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th scope="col">x</th><th scope="col">y = f(x)</th></tr></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    <section class="card chart-card" aria-label="函数图像">
+      <div class="chart-head">
+        <div style="min-width:0">
+          <p class="eyebrow" id="chartName">正弦函数</p>
+          <div class="chart-formula" id="chartFormula"></div>
+        </div>
+        <div class="chart-tools">
+          <span class="hint">拖动平移 · 滚轮缩放 · 双击复位</span>
+          <button type="button" class="btn" id="resetView">复位视图</button>
+        </div>
+      </div>
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="plot" tabindex="0" role="img" aria-label="函数图像">你的浏览器不支持 canvas，请查看数值表。</canvas>
+        <div class="tooltip" id="tooltip" hidden>
+          <div class="tt-row"><span class="tt-k">x</span><span class="tt-v" id="ttX">0</span></div>
+          <div class="tt-row"><span class="tt-k">f(x)</span><span class="tt-v" id="ttY">0</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <p class="foot">纯静态页面 · 无外部依赖 · 全部计算在浏览器本地完成</p>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const MINUS = '−';
+
+  function fmt(v, dec = 1) {
+    if (!Number.isFinite(v)) return '—';
+    let s = v.toFixed(dec);
+    if (parseFloat(s) === 0) s = (0).toFixed(dec);
+    return s.replace('-', MINUS);
+  }
+  function niceStep(raw) {
+    if (!(raw > 0)) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const n = raw / p;
+    const m = n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10;
+    return m * p;
+  }
+  function decimalsForStep(step) {
+    return Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  }
+  function tickValues(min, max, step) {
+    const out = [];
+    const start = Math.ceil(min / step - 1e-9) * step;
+    for (let v = start; v <= max + step * 1e-6; v += step) {
+      out.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+      if (out.length > 500) break;
+    }
+    return out;
+  }
+
+  /* ---------------- function families ---------------- */
+  const FAMILIES = [
+    {
+      id: 'sine',
+      name: '正弦函数',
+      view: { x0: -6.5, x1: 6.5, y0: -4.5, y1: 4.5 },
+      tableRange: [-6, 6, 0.5],
+      defs: [
+        { key: 'A', sym: 'A', label: '振幅', min: 0.2, max: 4, step: 0.1, def: 1.8, dec: 1 },
+        { key: 'w', sym: 'ω', label: '角频率', min: 0.2, max: 4, step: 0.1, def: 1.5, dec: 1 },
+        { key: 'phi', sym: 'φ', label: '初相', min: -3.14, max: 3.14, step: 0.05, def: 0.5, dec: 2 },
+        { key: 'k', sym: 'k', label: '竖直偏移', min: -3, max: 3, step: 0.1, def: 0, dec: 1 }
+      ],
+      f: (x, p) => p.A * Math.sin(p.w * x + p.phi) + p.k,
+      formula(p) {
+        const ph = Math.abs(p.phi);
+        let inner = fmt(p.w, 1) + 'x';
+        if (ph >= 0.005) inner += (p.phi < 0 ? ' − ' : ' + ') + fmt(ph, 2);
+        let s = 'y = ' + fmt(p.A, 1) + ' sin(' + inner + ')';
+        if (Math.abs(p.k) >= 0.05) s += (p.k < 0 ? ' − ' : ' + ') + fmt(Math.abs(p.k), 1);
+        return s;
+      },
+      insight(p) {
+        return '周期 T = 2π/ω ≈ ' + fmt(2 * Math.PI / p.w, 2) +
+          ' · 振幅 ' + fmt(p.A, 1) +
+          ' · 竖直方向平移 ' + fmt(p.k, 1);
+      }
+    },
+    {
+      id: 'quadratic',
+      name: '二次函数',
+      view: { x0: -6, x1: 6, y0: -8, y1: 8 },
+      tableRange: [-6, 6, 0.5],
+      defs: [
+        { key: 'a', sym: 'a', label: '二次项系数', min: -3, max: 3, step: 0.1, def: 1, dec: 1 },
+        { key: 'b', sym: 'b', label: '一次项系数', min: -6, max: 6, step: 0.1, def: 0, dec: 1 },
+        { key: 'c', sym: 'c', label: '常数项', min: -6, max: 6, step: 0.1, def: -2, dec: 1 }
+      ],
+      f: (x, p) => p.a * x * x + p.b * x + p.c,
+      formula(p) {
+        const eps = 1e-9;
+        const A = Math.abs(p.a), B = Math.abs(p.b), C = Math.abs(p.c);
+        let s = 'y = ';
+        if (A < eps) {
+          if (B < eps) return s + fmt(p.c, 1);
+          s += (p.b < 0 ? '−' : '') + (Math.abs(B - 1) < eps ? 'x' : fmt(B, 1) + 'x');
+          if (C >= eps) s += (p.c < 0 ? ' − ' : ' + ') + fmt(C, 1);
+          return s;
+        }
+        s += fmt(p.a, 1) + 'x²';
+        if (B >= eps) s += (p.b < 0 ? ' − ' : ' + ') + (Math.abs(B - 1) < eps ? 'x' : fmt(B, 1) + 'x');
+        if (C >= eps) s += (p.c < 0 ? ' − ' : ' + ') + fmt(C, 1);
+        return s;
+      },
+      insight(p) {
+        if (Math.abs(p.a) < 1e-9) {
+          return 'a = 0，函数退化为一次函数，斜率 ' + fmt(p.b, 1);
+        }
+        const { a, b, c } = p;
+        const xv = -b / (2 * a);
+        const yv = c - b * b / (4 * a);
+        const D = b * b - 4 * a * c;
+        const rootTxt = D > 1e-9 ? '与 x 轴有两个交点'
+          : (Math.abs(D) <= 1e-9 ? '与 x 轴相切' : '与 x 轴没有交点');
+        return '顶点 (' + fmt(xv, 2) + ', ' + fmt(yv, 2) + ') · Δ = b² − 4ac = ' + fmt(D, 2) + '，' + rootTxt;
+      }
+    },
+    {
+      id: 'damped',
+      name: '阻尼振动',
+      view: { x0: -0.9, x1: 12, y0: -3.8, y1: 3.8 },
+      tableRange: [0, 12, 0.5],
+      domainX0: 0,
+      defs: [
+        { key: 'A', sym: 'A', label: '初始振幅', min: 0.2, max: 6, step: 0.1, def: 3, dec: 1 },
+        { key: 'kd', sym: 'k', label: '衰减系数', min: 0, max: 1.5, step: 0.02, def: 0.25, dec: 2 },
+        { key: 'w', sym: 'ω', label: '角频率', min: 0.2, max: 5, step: 0.1, def: 2, dec: 1 }
+      ],
+      f: (x, p) => p.A * Math.exp(-p.kd * x) * Math.sin(p.w * x),
+      formula(p) {
+        const osc = 'sin(' + fmt(p.w, 1) + 'x)';
+        if (p.kd < 5e-10) return 'y = ' + fmt(p.A, 1) + ' ' + osc;
+        return 'y = ' + fmt(p.A, 1) + ' e<sup>−' + fmt(p.kd, 2) + 'x</sup> ' + osc;
+      },
+      insight(p) {
+        const T = 2 * Math.PI / p.w;
+        const decay = p.kd < 5e-10
+          ? '无衰减（等幅振动）'
+          : 'x 每增加 1，振幅变为原来的 ' + fmt(Math.exp(-p.kd), 2) + ' 倍';
+        return '周期 T ≈ ' + fmt(T, 2) + ' · ' + decay + ' · 只绘制 x ≥ 0 的部分';
+      }
+    },
+    {
+      id: 'gaussian',
+      name: '高斯钟形',
+      view: { x0: -6, x1: 6, y0: -0.7, y1: 3.7 },
+      tableRange: [-6, 6, 0.5],
+      defs: [
+        { key: 'A', sym: 'A', label: '峰值', min: 0.2, max: 5, step: 0.1, def: 3, dec: 1 },
+        { key: 'mu', sym: 'μ', label: '中心位置', min: -4, max: 4, step: 0.1, def: 0, dec: 1 },
+        { key: 'sig', sym: 'σ', label: '标准差', min: 0.2, max: 3, step: 0.05, def: 1, dec: 2 }
+      ],
+      f: (x, p) => p.A * Math.exp(-((x - p.mu) * (x - p.mu)) / (2 * p.sig * p.sig)),
+      formula(p) {
+        const mu = p.mu;
+        const inner = Math.abs(mu) < 0.05 ? 'x²'
+          : '(x ' + (mu < 0 ? '+ ' : '− ') + fmt(Math.abs(mu), 1) + ')²';
+        return 'y = ' + fmt(p.A, 1) + ' e<sup>−' + inner + ' / (2·' + fmt(p.sig, 2) + '²)</sup>';
+      },
+      insight(p) {
+        return '峰值 ' + fmt(p.A, 1) + ' 位于 x = ' + fmt(p.mu, 1) +
+          ' · 半高全宽 FWHM ≈ ' + fmt(2.3548 * p.sig, 2);
+      }
+    },
+    {
+      id: 'exponential',
+      name: '指数曲线',
+      view: { x0: -4, x1: 4, y0: -2, y1: 12 },
+      tableRange: [-4, 4, 0.5],
+      defs: [
+        { key: 'a', sym: 'a', label: '系数', min: 0.2, max: 5, step: 0.1, def: 1, dec: 1 },
+        { key: 'b', sym: 'b', label: '增长率', min: -1, max: 1, step: 0.05, def: 0.5, dec: 2 }
+      ],
+      f: (x, p) => p.a * Math.exp(p.b * x),
+      formula(p) {
+        if (Math.abs(p.b) < 5e-10) return 'y = ' + fmt(p.a, 1);
+        const b = Math.abs(p.b);
+        return 'y = ' + fmt(p.a, 1) + ' e<sup>' + (p.b < 0 ? '−' : '') + fmt(b, 2) + 'x</sup>';
+      },
+      insight(p) {
+        const b = p.b;
+        if (Math.abs(b) < 5e-10) return 'b = 0，函数退化为水平直线 y = a';
+        if (b > 0) return '倍增周期 ≈ ' + fmt(Math.LN2 / b, 2) + '：x 每增加这么多，y 翻一倍';
+        return '半衰期 ≈ ' + fmt(Math.LN2 / Math.abs(b), 2) + '：x 每增加这么多，y 减半';
+      }
+    }
+  ];
+
+  /* ---------------- state ---------------- */
+  FAMILIES.forEach(f => {
+    f.params = {};
+    f.defs.forEach(d => { f.params[d.key] = d.def; });
+  });
+
+  let famIndex = 0;
+  let current = FAMILIES[0];
+  const state = { view: { ...current.view }, hover: null };
+
+  const canvas = $('#plot');
+  const wrap = $('#canvasWrap');
+  const ctx = canvas.getContext('2d');
+  const tabsEl = $('#tabs');
+  const paramsEl = $('#params');
+  const chartNameEl = $('#chartName');
+  const chartFormulaEl = $('#chartFormula');
+  const insightEl = $('#insight');
+  const tableBody = $('#tableBody');
+  const tooltip = $('#tooltip');
+  const ttX = $('#ttX');
+  const ttY = $('#ttY');
+  const themeBtn = $('#themeToggle');
+
+  let cssW = 0, cssH = 0, dpr = 1;
+  let L = { l: 44, t: 14, r: 14, b: 26, w: 0, h: 0, pw: 0, ph: 0 };
+
+  /* ---------------- theme ---------------- */
+  const SUN_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M19.1 4.9l-1.6 1.6M6.5 17.5l-1.6 1.6"/></svg>';
+  const MOON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>';
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  let themeChoice = null;
+  try {
+    const saved = localStorage.getItem('function-lab-theme');
+    if (saved === 'light' || saved === 'dark') themeChoice = saved;
+  } catch (e) { /* ignore */ }
+
+  function isDark() { return themeChoice ? themeChoice === 'dark' : media.matches; }
+
+  function applyTheme() {
+    if (themeChoice) document.documentElement.dataset.theme = themeChoice;
+    else document.documentElement.removeAttribute('data-theme');
+    const dark = isDark();
+    themeBtn.innerHTML = dark ? SUN_SVG : MOON_SVG;
+    themeBtn.setAttribute('aria-label', dark ? '切换到浅色模式' : '切换到深色模式');
+    themeBtn.title = dark ? '切换到浅色模式' : '切换到深色模式';
+    render();
+  }
+
+  themeBtn.addEventListener('click', () => {
+    themeChoice = isDark() ? 'light' : 'dark';
+    try { localStorage.setItem('function-lab-theme', themeChoice); } catch (e) { /* ignore */ }
+    applyTheme();
+  });
+  media.addEventListener('change', () => { if (!themeChoice) applyTheme(); });
+
+  /* ---------------- DOM building ---------------- */
+  function buildTabs() {
+    tabsEl.innerHTML = '';
+    FAMILIES.forEach((f, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tab';
+      btn.textContent = f.name;
+      btn.setAttribute('aria-pressed', i === famIndex ? 'true' : 'false');
+      btn.addEventListener('click', () => selectFamily(i));
+      tabsEl.appendChild(btn);
+    });
+  }
+
+  function buildParams() {
+    paramsEl.innerHTML = '';
+    current.defs.forEach(def => {
+      const row = document.createElement('div');
+      row.className = 'param';
+
+      const head = document.createElement('div');
+      head.className = 'param-head';
+
+      const lab = document.createElement('label');
+      lab.className = 'param-label';
+      lab.htmlFor = 'p-' + def.key;
+      const sym = document.createElement('i');
+      sym.textContent = def.sym;
+      lab.appendChild(sym);
+      lab.appendChild(document.createTextNode(def.label));
+
+      const out = document.createElement('span');
+      out.className = 'param-value';
+      out.id = 'v-' + def.key;
+      out.textContent = fmt(current.params[def.key], def.dec);
+
+      head.appendChild(lab);
+      head.appendChild(out);
+
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.id = 'p-' + def.key;
+      input.min = def.min;
+      input.max = def.max;
+      input.step = def.step;
+      input.value = current.params[def.key];
+      input.setAttribute('aria-label', def.label + ' ' + def.sym);
+
+      input.addEventListener('input', () => {
+        const v = parseFloat(input.value);
+        current.params[def.key] = v;
+        out.textContent = fmt(v, def.dec);
+        scheduleUpdate();
+      });
+
+      row.appendChild(head);
+      row.appendChild(input);
+      paramsEl.appendChild(row);
+    });
+  }
+
+  function selectFamily(i) {
+    famIndex = i;
+    current = FAMILIES[i];
+    state.view = { ...current.view };
+    state.hover = null;
+    hideTooltip();
+    buildTabs();
+    buildParams();
+    refreshAll();
+  }
+
+  let pending = false;
+  function scheduleUpdate() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      updateDynamic();
+    });
+  }
+
+  function updateTable() {
+    const [from, to, step] = current.tableRange;
+    const rows = [];
+    for (let x = from; x <= to + step / 2; x += step) {
+      const y = current.f(x, current.params);
+      rows.push('<tr><td>' + fmt(x, 1) + '</td><td>' + fmt(y, 3) + '</td></tr>');
+    }
+    tableBody.innerHTML = rows.join('');
+  }
+
+  function updateDynamic() {
+    chartFormulaEl.innerHTML = current.formula(current.params);
+    insightEl.textContent = current.insight(current.params);
+    updateTable();
+    render();
+  }
+
+  function refreshAll() {
+    chartNameEl.textContent = current.name;
+    canvas.setAttribute('aria-label',
+      current.name + '的函数图像。可拖动平移、滚轮缩放、双击复位；精确数值见页面的数值表。');
+    updateDynamic();
+  }
+
+  function resetView() {
+    state.view = { ...current.view };
+    state.hover = null;
+    hideTooltip();
+    render();
+  }
+
+  /* ---------------- tooltip ---------------- */
+  function hideTooltip() {
+    tooltip.hidden = true;
+  }
+
+  function updateHover(lx, ly) {
+    if (lx < L.l || lx > L.l + L.pw || ly < L.t || ly > L.t + L.ph) {
+      hideTooltip();
+      if (state.hover) { state.hover = null; render(); }
+      return;
+    }
+    const { x0, x1 } = state.view;
+    const x = x0 + (lx - L.l) / L.pw * (x1 - x0);
+    const y = current.f(x, current.params);
+    state.hover = { px: lx, py: ly, x, y };
+    ttX.textContent = fmt(x, 3);
+    ttY.textContent = Number.isFinite(y) ? fmt(y, 3) : '—';
+    tooltip.hidden = false;
+
+    const tw = tooltip.offsetWidth;
+    const th = tooltip.offsetHeight;
+    let tx = lx + 16;
+    let ty = ly + 16;
+    if (tx + tw > cssW - 8) tx = lx - tw - 16;
+    if (ty + th > cssH - 8) ty = ly - th - 16;
+    if (tx < 8) tx = 8;
+    if (ty < 8) ty = 8;
+    tooltip.style.transform = 'translate(' + Math.round(tx) + 'px, ' + Math.round(ty) + 'px)';
+    render();
+  }
+
+  /* ---------------- view transforms ---------------- */
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+  function zoomAt(px, py, factor) {
+    if (!L.pw || !L.ph) return;
+    const { x0, x1, y0, y1 } = state.view;
+    const rx = clamp((px - L.l) / L.pw, 0, 1);
+    const ry = clamp((py - L.t) / L.ph, 0, 1);
+    const wx = x0 + rx * (x1 - x0);
+    const wy = y1 - ry * (y1 - y0);
+    const nxr = (x1 - x0) * factor;
+    const nyr = (y1 - y0) * factor;
+    if (nxr < 1e-5 || nxr > 1e5) return;
+    state.view = {
+      x0: wx - rx * nxr,
+      x1: wx + (1 - rx) * nxr,
+      y0: wy - (1 - ry) * nyr,
+      y1: wy + ry * nyr
+    };
+    state.hover = null;
+    hideTooltip();
+    render();
+  }
+
+  function panBy(dxPx, dyPx) {
+    if (!L.pw || !L.ph) return;
+    const { x0, x1, y0, y1 } = state.view;
+    const xShift = dxPx / L.pw * (x1 - x0);
+    const yShift = dyPx / L.ph * (y1 - y0);
+    state.view = { x0: x0 - xShift, x1: x1 - xShift, y0: y0 + yShift, y1: y1 + yShift };
+    state.hover = null;
+    hideTooltip();
+    render();
+  }
+
+  /* ---------------- pointer interaction ---------------- */
+  const pointers = new Map();
+  let drag = null;
+  let pinch = null;
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    canvas.focus({ preventScroll: true });
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size === 1) {
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0 };
+      pinch = null;
+      hideTooltip();
+      state.hover = null;
+      canvas.style.cursor = 'grabbing';
+    } else if (pointers.size === 2) {
+      drag = null;
+      const pts = Array.from(pointers.values());
+      pinch = {
+        d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+        mid: { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      };
+      hideTooltip();
+      state.hover = null;
+    }
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (pointers.has(e.pointerId)) {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    const rect = canvas.getBoundingClientRect();
+
+    if (pointers.size === 2 && pinch) {
+      const pts = Array.from(pointers.values());
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      if (pinch.d > 0 && d > 0) {
+        zoomAt(mid.x - rect.left, mid.y - rect.top, pinch.d / d);
+        panBy(mid.x - pinch.mid.x, mid.y - pinch.mid.y);
+      }
+      pinch = { d, mid };
+      return;
+    }
+
+    if (drag && e.pointerId === drag.id) {
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      drag.moved += Math.abs(dx) + Math.abs(dy);
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      panBy(dx, dy);
+      return;
+    }
+
+    if (pointers.size === 0) {
+      updateHover(e.clientX - rect.left, e.clientY - rect.top);
+    }
+  });
+
+  function endPointer(e) {
+    pointers.delete(e.pointerId);
+    if (drag && e.pointerId === drag.id) {
+      const wasTap = drag.moved < 6;
+      drag = null;
+      canvas.style.cursor = '';
+      if (wasTap) {
+        const rect = canvas.getBoundingClientRect();
+        updateHover(e.clientX - rect.left, e.clientY - rect.top);
+      }
+    }
+    if (pointers.size < 2) pinch = null;
+    if (pointers.size === 1 && !drag) {
+      const entry = Array.from(pointers.entries())[0];
+      drag = { id: entry[0], x: entry[1].x, y: entry[1].y, moved: 10 };
+    }
+  }
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', (e) => {
+    pointers.delete(e.pointerId);
+    if (drag && e.pointerId === drag.id) { drag = null; canvas.style.cursor = ''; }
+    if (pointers.size < 2) pinch = null;
+  });
+
+  canvas.addEventListener('pointerleave', () => {
+    if (!drag && pointers.size === 0) {
+      hideTooltip();
+      if (state.hover) { state.hover = null; render(); }
+    }
+  });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(e.deltaY * 0.0015));
+  }, { passive: false });
+
+  canvas.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    resetView();
+  });
+
+  canvas.addEventListener('keydown', (e) => {
+    const stepPx = 40;
+    let handled = true;
+    if (e.key === 'ArrowLeft') panBy(stepPx, 0);
+    else if (e.key === 'ArrowRight') panBy(-stepPx, 0);
+    else if (e.key === 'ArrowUp') panBy(0, stepPx);
+    else if (e.key === 'ArrowDown') panBy(0, -stepPx);
+    else if (e.key === '+' || e.key === '=') zoomAt(L.l + L.pw / 2, L.t + L.ph / 2, 0.8);
+    else if (e.key === '-') zoomAt(L.l + L.pw / 2, L.t + L.ph / 2, 1.25);
+    else if (e.key === '0' || e.key === 'Home') resetView();
+    else handled = false;
+    if (handled) e.preventDefault();
+  });
+
+  /* ---------------- rendering ---------------- */
+  function resize() {
+    const r = wrap.getBoundingClientRect();
+    if (r.width < 10 || r.height < 10) return;
+    cssW = r.width;
+    cssH = r.height;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    render();
+  }
+
+  function render() {
+    if (!cssW || !cssH) return;
+    const cs = getComputedStyle(document.documentElement);
+    const col = {
+      surface: cs.getPropertyValue('--surface').trim(),
+      ink: cs.getPropertyValue('--ink').trim(),
+      ink2: cs.getPropertyValue('--ink-2').trim(),
+      muted: cs.getPropertyValue('--muted').trim(),
+      grid: cs.getPropertyValue('--grid').trim(),
+      axis: cs.getPropertyValue('--axis').trim(),
+      accent: cs.getPropertyValue('--accent').trim()
+    };
+
+    const small = cssW < 520;
+    const pad = small ? { l: 34, r: 10, t: 10, b: 22 } : { l: 44, r: 14, t: 14, b: 26 };
+    L = {
+      l: pad.l, t: pad.t, r: pad.r, b: pad.b,
+      w: cssW, h: cssH,
+      pw: cssW - pad.l - pad.r,
+      ph: cssH - pad.t - pad.b
+    };
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.fillStyle = col.surface;
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    const { x0, x1, y0, y1 } = state.view;
+    const X = (x) => L.l + (x - x0) / (x1 - x0) * L.pw;
+    const Y = (y) => L.t + (y1 - y) / (y1 - y0) * L.ph;
+
+    const xTarget = Math.min(9, Math.max(3, Math.round(L.pw / 70)));
+    const yTarget = Math.min(8, Math.max(3, Math.round(L.ph / 40)));
+    const xStep = niceStep((x1 - x0) / xTarget);
+    const yStep = niceStep((y1 - y0) / yTarget);
+    const xDec = decimalsForStep(xStep);
+    const yDec = decimalsForStep(yStep);
+
+    /* grid */
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = col.grid;
+    ctx.beginPath();
+    for (const t of tickValues(x0, x1, xStep)) {
+      const px = Math.round(X(t)) + 0.5;
+      ctx.moveTo(px, L.t);
+      ctx.lineTo(px, L.t + L.ph);
+    }
+    for (const t of tickValues(y0, y1, yStep)) {
+      const py = Math.round(Y(t)) + 0.5;
+      ctx.moveTo(L.l, py);
+      ctx.lineTo(L.l + L.pw, py);
+    }
+    ctx.stroke();
+
+    /* zero axes */
+    ctx.strokeStyle = col.axis;
+    ctx.beginPath();
+    if (y0 <= 0 && 0 <= y1) {
+      const py = Math.round(Y(0)) + 0.5;
+      ctx.moveTo(L.l, py);
+      ctx.lineTo(L.l + L.pw, py);
+    }
+    if (x0 <= 0 && 0 <= x1) {
+      const px = Math.round(X(0)) + 0.5;
+      ctx.moveTo(px, L.t);
+      ctx.lineTo(px, L.t + L.ph);
+    }
+    ctx.stroke();
+
+    /* tick labels */
+    ctx.fillStyle = col.muted;
+    ctx.font = (small ? 10 : 11) + 'px system-ui, "Segoe UI", "Microsoft YaHei", sans-serif';
+
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (const t of tickValues(y0, y1, yStep)) {
+      const py = Y(t);
+      if (py < L.t + 5 || py > L.t + L.ph - 5) continue;
+      ctx.fillText(fmt(t, yDec), L.l - 6, py);
+    }
+
+    ctx.textBaseline = 'alphabetic';
+    for (const t of tickValues(x0, x1, xStep)) {
+      const px = X(t);
+      if (px < L.l + 13) ctx.textAlign = 'left';
+      else if (px > L.l + L.pw - 13) ctx.textAlign = 'right';
+      else ctx.textAlign = 'center';
+      ctx.fillText(fmt(t, xDec), px, L.t + L.ph + (small ? 15 : 17));
+    }
+
+    /* curve */
+    const p = current.params;
+    const xStart = current.domainX0 != null ? Math.max(x0, current.domainX0) : x0;
+    if (xStart < x1) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(L.l, L.t, L.pw, L.ph);
+      ctx.clip();
+
+      ctx.beginPath();
+      let started = false;
+      const pxL = Math.max(L.l, Math.ceil(X(xStart)));
+      const pxR = L.l + L.pw;
+      for (let px = pxL; px <= pxR; px += 1) {
+        const x = x0 + (px - L.l) / L.pw * (x1 - x0);
+        const y = current.f(x, p);
+        if (!Number.isFinite(y)) { started = false; continue; }
+        const py = Y(y);
+        if (py < -20000 || py > 20000) { started = false; continue; }
+        if (!started) { ctx.moveTo(px, py); started = true; }
+        else ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = col.accent;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    /* hover crosshair + point */
+    if (state.hover && state.hover.px >= L.l && state.hover.px <= L.l + L.pw) {
+      const hx = state.hover.px;
+      const xAt = x0 + (hx - L.l) / L.pw * (x1 - x0);
+      const yAt = current.f(xAt, p);
+
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = col.muted;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(Math.round(hx) + 0.5, L.t);
+      ctx.lineTo(Math.round(hx) + 0.5, L.t + L.ph);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      if (Number.isFinite(yAt)) {
+        const hy = Y(yAt);
+        if (hy >= L.t - 22 && hy <= L.t + L.ph + 22) {
+          ctx.beginPath();
+          ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = col.accent;
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = col.surface;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  /* ---------------- wire up ---------------- */
+  $('#resetView').addEventListener('click', resetView);
+  $('#resetParams').addEventListener('click', () => {
+    current.defs.forEach(d => { current.params[d.key] = d.def; });
+    buildParams();
+    updateDynamic();
+  });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => resize()).observe(wrap);
+  }
+  window.addEventListener('resize', resize);
+
+  buildTabs();
+  buildParams();
+  refreshAll();
+  applyTheme();
+  requestAnimationFrame(resize);
+})();
+</script>
+</body>
+</html>
